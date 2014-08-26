@@ -99,7 +99,7 @@ def load():
 
     _config = Config(f.read())
     if flavor:
-        if not flavor in _config:
+        if flavor not in _config:
             raise exceptions.ConfigError(
                 'The specified flavor (%s) is missing in your config file (%s)'
                 % (flavor, config_path))
