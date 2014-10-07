@@ -2,12 +2,7 @@
 
 from __future__ import print_function
 
-# this must happen before anything else
-import gevent.monkey
-gevent.monkey.patch_all()
-
-from argparse import ArgumentParser  # noqa
-from argparse import RawTextHelpFormatter  # noqa
+import argparse  # noqa
 
 import distutils.spawn
 import getpass
@@ -15,18 +10,7 @@ import logging
 import os
 import sys
 
-from .app import app  # noqa
-from .tags import *  # noqa
-from .images import *  # noqa
-from .lib import config
 from .server import env
-from .status import *  # noqa
-from .search import *  # noqa
-
-cfg = config.load()
-if cfg.standalone:
-    # If standalone mode is enabled, load the fake Index routes
-    from .index import *  # noqa
 
 
 logger = logging.getLogger(__name__)
@@ -54,8 +38,9 @@ def run_gunicorn():
     """
 
     # this only exists to provide help/usage text
-    parser = ArgumentParser(description=DESCRIPTION,
-                            formatter_class=RawTextHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=DESCRIPTION,
+        formatter_class=argparse.RawTextHelpFormatter)
     parser.parse_args()
 
     gunicorn_path = distutils.spawn.find_executable('gunicorn')
@@ -74,14 +59,14 @@ def run_gunicorn():
         '--error-logfile', env.source('GUNICORN_ERROR_LOG_FILE'),
         '--max-requests', '100',
         '-k', 'gevent',
-        '--reload', False if env.source('SETTINGS_FLAVOR') == 'prod' else True,
         '--graceful-timeout', env.source('GUNICORN_GRACEFUL_TIMEOUT'),
         '-t', env.source('GUNICORN_SILENT_TIMEOUT'),
         '-w', env.source('GUNICORN_WORKERS'),
         '-b', address,
-    ] + env.source('GUNICORN_OPTS') + [
-        'docker_registry.wsgi:application'
     ]
+
+    if env.source('SETTINGS_FLAVOR') != 'prod':
+        args.append('--reload')
 
     user = env.source('GUNICORN_USER')
     group = env.source('GUNICORN_GROUP')
@@ -99,5 +84,7 @@ def run_gunicorn():
         else:
             logger.warn('You asked we drop priviledges, but we are not root!')
 
+    args += env.source('GUNICORN_OPTS')
+    args.append('docker_registry.wsgi:application')
     # Stringify all args and call
     os.execl(*[str(v) for v in args])

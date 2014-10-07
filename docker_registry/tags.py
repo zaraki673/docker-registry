@@ -70,7 +70,9 @@ def get_tags(namespace, repository):
         if not full_tag_name.startswith('tag_'):
             continue
         tag_name = full_tag_name[4:]
-        tag_content = store.get_content(fname)
+        tag_content = store.get_content(
+            store.tag_path(namespace, repository, tag_name)
+        )
         yield (tag_name, tag_content)
 
 
@@ -206,14 +208,17 @@ def put_tag(namespace, repository, tag):
 def delete_tag(namespace, repository, tag):
     logger.debug("[delete_tag] namespace={0}; repository={1}; tag={2}".format(
                  namespace, repository, tag))
-    store.remove(store.tag_path(namespace, repository, tag))
+    tag_path = store.tag_path(namespace, repository, tag)
+    image = store.get_content(path=tag_path)
+    store.remove(tag_path)
     store.remove(store.repository_tag_json_path(namespace, repository,
                                                 tag))
     sender = flask.current_app._get_current_object()
     if tag == "latest":  # TODO(wking) : deprecate this for v2
         store.remove(store.repository_json_path(namespace, repository))
     signals.tag_deleted.send(
-        sender, namespace=namespace, repository=repository, tag=tag)
+        sender, namespace=namespace, repository=repository, tag=tag,
+        image=image)
 
 
 @app.route('/v1/repositories/<path:repository>/tags/<tag>',
@@ -225,7 +230,7 @@ def _delete_tag(namespace, repository, tag):
     try:
         delete_tag(namespace=namespace, repository=repository, tag=tag)
     except exceptions.FileNotFoundError:
-        return toolkit.api_error('Tag not found', 404)
+        return toolkit.api_error('Tag not found: %s' % tag, 404)
     return toolkit.response()
 
 

@@ -21,22 +21,23 @@ requirements = [line for line in requirements_txt]
 
 if ver < (3, 0):
     # Python 2 requires lzma backport
-    requirements.insert(0, 'backports.lzma>=0.0.2')
+    requirements.insert(0, 'backports.lzma==0.0.3,!=0.0.4')
     if ver < (2, 7):
         # Python 2.6 requires additional libraries
-        requirements.insert(0, 'argparse>=1.2.1')
-        requirements.insert(0, 'importlib>=1.0.3')
+        requirements.insert(0, 'argparse==1.2.1')
+        requirements.insert(0, 'importlib==1.0.3')
 
 # Using this will relax dependencies to semver major matching
 if 'DEPS' in os.environ and os.environ['DEPS'].lower() == 'loose':
     loose = []
     for item in requirements:
-        d = re.match(r'([^=]+)==([0-9]+)[.]([0-9]+)[.]([0-9]+)', item)
+        d = re.match(r'([^=]+)==([0-9]+)[.]([0-9]+)(?:[.]([0-9]+))?(.*)', item)
         if d:
             d = list(d.groups())
             name = d.pop(0)
             version = d.pop(0)
-            item = '%s>=%s,<%s' % (name, int(version), int(version) + 1)
+            add = d.pop()
+            item = '%s>=%s,<%s%s' % (name, int(version), int(version) + 1, add)
         loose.insert(0, item)
     requirements = loose
 
@@ -46,10 +47,13 @@ requirements.insert(0, 'docker-registry-core>=2,<3')
 # Explicit packages list to avoid setup_tools funkyness
 packages = ['docker_registry',
             'docker_registry.drivers',
-            'docker_registry.server',
+            'docker_registry.extensions',
+            'docker_registry.extras',
             'docker_registry.lib',
+            'docker_registry.lib.index',
+            'docker_registry.server',
             'docker_registry.storage',
-            'docker_registry.lib.index']
+            ]
 
 namespaces = ['docker_registry', 'docker_registry.drivers']
 
@@ -96,5 +100,6 @@ setuptools.setup(
     extras_require={
         'bugsnag': ['bugsnag>=2.0,<2.1'],
         'newrelic': ['newrelic>=2.22,<2.23'],
+        'cors': ['Flask-cors>=1.8,<2.0'],
     }
 )

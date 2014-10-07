@@ -2,6 +2,7 @@
 
 import StringIO
 import sys
+import time
 
 from nose import tools
 
@@ -112,3 +113,63 @@ class TestDriver(testing.Driver):
 
         # We don't call self._storage.remove(filename) here to ensure tearDown
         # cleanup properly and that other tests keep running as expected.
+
+    # Validation test for docker-index#486
+    def test_get_tags(self):
+        store = self._storage
+        store._root_path = 'my/custom/path'
+        store._init_path()
+        assert store._root_path == 'my/custom/path'
+        tag_path = store.tag_path('test', 'test', '0.0.2')
+        store.put_content(tag_path, 'randomdata')
+        tags_path = store.tag_path('test', 'test')
+        for fname in store.list_directory(tags_path):
+            full_tag_name = fname.split('/').pop()
+            if not full_tag_name == 'tag_0.0.2':
+                continue
+            try:
+                store.get_content(fname)
+            except exceptions.FileNotFoundError:
+                pass
+            except Exception as e:
+                raise e
+            else:
+                assert False
+
+        tag_content = store.get_content(tag_path)
+        assert tag_content == 'randomdata'
+
+    def test_consistency_latency(self):
+        self.testCount = -1
+        mockKey = mock_boto.Key()
+
+        def mockExists():
+            self.testCount += 1
+            return self.testCount == 1
+        mockKey.exists = mockExists
+        mockKey.get_contents_as_string = lambda: "Foo bar"
+        self._storage.makeKey = lambda x: mockKey
+        startTime = time.time()
+
+        content = self._storage.get_content("/FOO")
+
+        waitTime = time.time() - startTime
+        assert waitTime >= 0.1, ("Waiting time was less than %sms "
+                                 "(actual : %sms)" %
+                                 (0.1 * 1000, waitTime * 1000))
+        assert content == "Foo bar", ("expected : %s; actual: %s" %
+                                      ("Foo bar", content))
+
+    @tools.raises(exceptions.FileNotFoundError)
+    def test_too_many_read_retries(self):
+        self.testCount = -1
+        mockKey = mock_boto.Key()
+
+        def mockExists():
+            self.testCount += 1
+            return self.testCount == 5
+        mockKey.exists = mockExists
+        mockKey.get_contents_as_string = lambda: "Foo bar"
+        self._storage.makeKey = lambda x: mockKey
+
+        self._storage.get_content("/FOO")
